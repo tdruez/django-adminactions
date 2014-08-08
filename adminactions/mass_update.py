@@ -5,8 +5,8 @@ import string
 from collections import defaultdict
 
 from django import forms
-from django.db import IntegrityError, transaction
 from django.db.models import fields as df
+from django.db.models import FieldDoesNotExist
 from django.forms import fields as ff
 from django.forms.models import modelform_factory, ModelMultipleChoiceField, construct_instance, InlineForeignKeyField
 from django.contrib import messages
@@ -104,6 +104,24 @@ OPERATIONS = OperationManager({
     df.EmailField: [('change domain', (change_domain, True, True, ""))],
     df.URLField: [('change protocol', (change_protocol, True, True, ""))]
 })
+
+
+def set_intermediate_explicit_m2m(record, field, value_or_func):
+    """
+    Deals with m2m with explicit intermediate through relation.
+    Using get_or_create to avoid create duplicate entries.
+    Warning: This will fail if required fields (except the 2 FKs) are defined
+    on the intermediary model.
+    """
+    if callable(value_or_func):
+        raise AttributeError("Operations not available on a ManyToManyField "
+                             "which specifies an intermediary model.")
+
+    for related_instance in value_or_func:
+        field.rel.through.objects.get_or_create(**{
+            field.m2m_field_name(): record,
+            field.m2m_reverse_field_name(): related_instance,
+        })
 
 
 class MassUpdateForm(GenericActionForm):
@@ -253,7 +271,16 @@ def mass_update(modeladmin, request, queryset):
                     updated = 0
                     for record in queryset:
                         for field_name, value_or_func in form.cleaned_data.items():
-                            if callable(value_or_func):
+                            # Getting information about the field to determine what to apply.
+                            try:
+                                field_object, __, __, m2m = record._meta.get_field_by_name(field_name)
+                            except FieldDoesNotExist:
+                                continue  # field_name is not part of the model
+
+                            # auto_created is only True on implicit m2m model
+                            if m2m and not field_object.rel.through._meta.auto_created:
+                                set_intermediate_explicit_m2m(record, field_object, value_or_func)
+                            elif callable(value_or_func):
                                 old_value = getattr(record, field_name)
                                 setattr(record, field_name, value_or_func(old_value))
                             else:
