@@ -1,6 +1,11 @@
 # -*- encoding: utf-8 -*-
 import datetime
-import xlwt
+
+try:
+    import xlwt
+except ImportError:
+    pass
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.fields import FieldDoesNotExist
 from django.db.models.fields.related import ManyToManyField, OneToOneField
