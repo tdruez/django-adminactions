@@ -258,10 +258,10 @@ def mass_update(modeladmin, request, queryset):
                                 setattr(record, field_name, value_or_func(old_value))
                             else:
                                 setattr(record, field_name, value_or_func)
-                            if clean:
-                                record.clean()
-                            record.save()
-                            updated += 1
+                        if clean:
+                            record.clean()
+                        record.save()
+                        updated += 1
                     if updated:
                         messages.info(request, _("Updated %s records") % updated)
 
